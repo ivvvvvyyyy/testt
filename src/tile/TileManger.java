@@ -3,6 +3,7 @@ package tile;
 import main.GamePanel;
 import javax.imageio.ImageIO;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,56 +12,66 @@ import java.io.InputStreamReader;
 public class TileManger {
     GamePanel gp;
     Tile[] tile;
-    int mapTileNum[][];
+    public int mapTileNum[][];
 
     public TileManger(GamePanel gp) {
-
         this.gp = gp;
-        tile = new Tile[10];
-        mapTileNum = new int[gp.maxScreenCol][gp.maxScreenRow];
+        tile = new Tile[150];
+        mapTileNum = new int[gp.maxWorldCol][gp.maxWorldRow];
 
-        getTileImage();
+        getTileImages();
         loadMap("/maps/map.txt");
-
     }
 
-    public void getTileImage() {
+    public void getTileImages() {
         try {
-
-            tile[0] = new Tile();
-            tile[0].image = ImageIO.read(getClass().getResourceAsStream("/tileset/001.png"));
-            tile[1] = new Tile();
-            tile[1].image = ImageIO.read(getClass().getResourceAsStream("/tileset/002.png"));
-            tile[2] = new Tile();
-            tile[2].image = ImageIO.read(getClass().getResourceAsStream("/tileset/003.png"));
-            tile[3] = new Tile();
-            tile[3].image = ImageIO.read(getClass().getResourceAsStream("/tileset/004.png"));
-
-
-
-
-        }catch(IOException e) {
+            tile[40] = new Tile();
+            tile[40].image = ImageIO.read(getClass().getResourceAsStream("/tileset/40.png"));
+            tile[41] = new Tile();
+            tile[41].image = ImageIO.read(getClass().getResourceAsStream("/tileset/41.png"));
+            tile[42] = new Tile();
+            tile[42].image = ImageIO.read(getClass().getResourceAsStream("/tileset/42.png"));
+            tile[43] = new Tile();
+            tile[43].image = ImageIO.read(getClass().getResourceAsStream("/tileset/43.png"));
+            tile[46] = new Tile();
+            tile[46].image = ImageIO.read(getClass().getResourceAsStream("/tileset/46.png"));
+            tile[48] = new Tile();
+            tile[48].image = ImageIO.read(getClass().getResourceAsStream("/tileset/48.png"));
+            tile[49] = new Tile();
+            tile[49].image = ImageIO.read(getClass().getResourceAsStream("/tileset/49.png"));
+            tile[71] = new Tile();
+            tile[71].image = ImageIO.read(getClass().getResourceAsStream("/tileset/71.png"));
+            tile[74] = new Tile();
+            tile[74].image = ImageIO.read(getClass().getResourceAsStream("/tileset/74.png"));
+            tile[77] = new Tile();
+            tile[77].image = ImageIO.read(getClass().getResourceAsStream("/tileset/77.png"));
+            tile[88] = new Tile();
+            tile[88].image = ImageIO.read(getClass().getResourceAsStream("/tileset/88.png"));
+            tile[118] = new Tile();
+            tile[118].image = ImageIO.read(getClass().getResourceAsStream("/tileset/118.png"));
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
-    public void loadMap(String filePath){
+
+    public void loadMap(String filePath) {
         try {
             InputStream is = getClass().getResourceAsStream(filePath);
             BufferedReader br = new BufferedReader(new InputStreamReader(is));
             int col = 0;
             int row = 0;
-            while (col < gp.maxScreenCol && row < gp.maxScreenRow) {
+
+            while (col < gp.maxWorldCol && row < gp.maxWorldRow) {
                 String line = br.readLine();
-                while (col < gp.maxScreenCol) {
+                while (col < gp.maxWorldCol) {
                     String numbers[] = line.split(" ");
                     int num = Integer.parseInt(numbers[col]);
                     mapTileNum[col][row] = num;
                     col++;
                 }
-                if(col == gp.maxScreenCol) {
+                if (col == gp.maxWorldCol) {
                     col = 0;
                     row++;
-
                 }
             }
             br.close();
@@ -69,37 +80,32 @@ public class TileManger {
         }
     }
 
-    public void draw(Graphics2D g2){
-       int row = 0;
-       int col = 0;
-       int x = 0;
-       int y = 0;
+    public void draw(Graphics2D g2) {
+        int worldCol = 0;
+        int worldRow = 0;
 
-       while (col < gp.maxScreenCol && row < gp.maxScreenRow) {
-           int tileNum = mapTileNum[col][row];
+        while (worldCol < gp.maxWorldCol && worldRow < gp.maxWorldRow) {
 
-           g2.drawImage(tile[tileNum].image , x , y , gp.tileSize , gp.tileSize,null);
-           col++;
-           x += gp.tileSize;
+            int tileNum = mapTileNum[worldCol][worldRow];
 
-           if (col == gp.maxScreenCol) {
-               col = 0;
-               x=0;
-               row++;
-               y+= gp.tileSize;
+            int worldX = worldCol * gp.tileSize;
+            int worldY = worldRow * gp.tileSize;
 
 
+            int screenX = worldX - gp.player.worldX + gp.player.screenX;
+            int screenY = worldY - gp.player.worldY + gp.player.screenY;
 
+            if (tileNum >= 0 && tileNum < tile.length && tile[tileNum] != null && tile[tileNum].image != null) {
+                g2.drawImage(tile[tileNum].image, screenX, screenY, gp.tileSize, gp.tileSize, null);
+            }
 
+            worldCol++;
 
-           }
-
-
-
-
-
-       }
+            if (worldCol == gp.maxWorldCol) {
+                worldCol = 0;
+                worldRow++;
+            }
+        }
     }
 }
-
 

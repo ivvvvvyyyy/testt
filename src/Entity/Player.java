@@ -10,17 +10,22 @@ import java.io.IOException;
 public class Player extends Entity {
     GamePanel gp;
     KeyButtons keyB;
+    public final int screenX;
+    public final int screenY;
+
 
     public Player(GamePanel gp, KeyButtons keyB) {
         this.gp = gp;
         this.keyB = keyB;
+        screenX = gp.screenWidth / 2 - (gp.tileSize / 2);
+        screenY = gp.screenHeight / 2 - (gp.tileSize / 2);
 
         setDefaultValues();
         getPlayerImage();
     }
     public void setDefaultValues() {
-        x = 100;
-        y = 100;
+        worldX = gp.tileSize * 35;
+        worldY = gp.tileSize * 20;
         speed = 4;
         direction= "down";
     }
@@ -55,19 +60,19 @@ public class Player extends Entity {
         if (keyB.upPressed || keyB.downPressed || keyB.leftPressed || keyB.rightPressed) {
 
             if (keyB.upPressed == true) {
-                y -= speed;
+                worldY -= speed;
                 direction = "up";
             }
             if (keyB.downPressed == true) {
-                y += speed;
+                worldY += speed;
                 direction = "down";
             }
             if (keyB.leftPressed == true) {
-                x -= speed;
+                worldX -= speed;
                 direction = "left";
             }
             if (keyB.rightPressed == true) {
-                x += speed;
+                worldX += speed;
                 direction = "right";
             }
             spriteCounter++;
@@ -141,7 +146,7 @@ public class Player extends Entity {
                 }
                 break;
         }
-        g2.drawImage(image ,x,y, gp.tileSize , gp.tileSize, null);
+        g2.drawImage(image ,screenX,screenY, gp.tileSize , gp.tileSize, null);
 
 
     }
