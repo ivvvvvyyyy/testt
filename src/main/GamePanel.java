@@ -37,9 +37,21 @@ public class GamePanel extends JPanel implements Runnable {
 
     // Story
     public String[] storyPages = {
-            "In a world consumed by sin, one hunter stands against the darkness...",
-            "Seven evils roam the land. You must face them all.",
-            "Your journey begins now."
+            "My great-great-great-great grandma, Pandora",
+            "Had one job, keep the lid closed.",
+            "She failed...",
+            "She let the darkness breathe, and for centuries, humanity has been suffocating on the fumes.",
+            "The Sins didn't just vanish into the wind",
+            "They grew. They evolved. They became the architects of our misery, turning the world into a playground for their hunger.",
+            "Grief, Rage, and Vanity aren't just feelings anymore ... they're the monsters under your bed ",
+            "And the shadows in the streets.",
+            "The Gods are gone, but their garbage remained",
+            "For generations, my bloodline has been haunted by the echo of that empty box.",
+            "We don't get to be heroes. We don't get to be legends. We are just the cosmic janitors of a broken world",
+            "The world is drowning in a mess I didn't make, but I'm the only one left with the bucket",
+            "It's time to hunt."
+
+
     };
     public int storyPageIndex = 0;
     public String fullText      = "";
