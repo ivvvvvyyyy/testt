@@ -29,7 +29,6 @@ public class KeyButtons implements KeyListener {
             if (code == KeyEvent.VK_ENTER) {
                 if (gp.commandNum == 0) {
                     gp.gameState = gp.storyState;
-                    // Resetting the story variables just to be perfectly safe!
                     gp.storyPageIndex = 0;
                     gp.fullText = gp.storyPages[0];
                     gp.displayedText = "";
@@ -38,16 +37,12 @@ public class KeyButtons implements KeyListener {
                 if (gp.commandNum == 1) System.exit(0);
             }
         }
-        // FIXED: Changed to 'else if' to prevent the Enter key from cascading!
         else if (gp.gameState == gp.storyState) {
             if (code == KeyEvent.VK_ENTER) {
-                boolean textDone = gp.charIndex >= gp.fullText.length();
-                if (!textDone) {
-                    // Skip typing animation
+                if (gp.charIndex < gp.fullText.length()) {
                     gp.displayedText = gp.fullText;
                     gp.charIndex = gp.fullText.length();
                 } else {
-                    // Next page
                     gp.storyPageIndex++;
                     if (gp.storyPageIndex >= gp.storyPages.length) {
                         gp.gameState = gp.playState;
@@ -59,7 +54,6 @@ public class KeyButtons implements KeyListener {
                 }
             }
         }
-        // FIXED: Changed to 'else if'
         else if (gp.gameState == gp.playState) {
             if (code == KeyEvent.VK_W) upPressed = true;
             if (code == KeyEvent.VK_S) downPressed = true;
@@ -67,32 +61,65 @@ public class KeyButtons implements KeyListener {
             if (code == KeyEvent.VK_A) leftPressed = true;
             if (code == KeyEvent.VK_E) gp.interactPressed = true;
         }
-        // FIXED: Changed to 'else if'
         else if (gp.gameState == gp.dialogueState) {
             if (code == KeyEvent.VK_ENTER) {
-                boolean textDone = gp.charIndex >= gp.fullText.length();
-                if (!textDone) {
+                if (gp.charIndex < gp.fullText.length()) {
                     gp.displayedText = gp.fullText;
                     gp.charIndex = gp.fullText.length();
                 } else {
                     gp.dialoguePageIndex++;
                     if (gp.dialoguePageIndex >= gp.talkingNPC.dialoguePages.length) {
-                        gp.gameState = gp.playState;
-                        gp.talkingNPC = null;
-                        gp.dialoguePageIndex = 0;
+                        if (gp.talkingNPC.hostile) {
+                            gp.combatManager.startCombat(gp.talkingNPC);
+                        } else {
+                            gp.gameState = gp.playState;
+                        }
                     } else {
                         gp.fullText = gp.talkingNPC.dialoguePages[gp.dialoguePageIndex];
+                        gp.currentSpeaker = gp.talkingNPC.name;
                         gp.displayedText = "";
                         gp.charIndex = 0;
                     }
                 }
             }
         }
-        // FIXED: Changed to 'else if'
+        else if (gp.gameState == gp.winDialogueState) {
+            if (code == KeyEvent.VK_ENTER) {
+                if (gp.charIndex < gp.fullText.length()) {
+                    gp.displayedText = gp.fullText;
+                    gp.charIndex = gp.fullText.length();
+                } else {
+                    gp.dialoguePageIndex++;
+                    if (gp.dialoguePageIndex >= gp.talkingNPC.dialoguePages.length) {
+
+
+                        for (int i = 0; i < gp.npcs.length; i++) {
+                            if (gp.npcs[i] == gp.talkingNPC) {
+                                gp.npcs[i] = null;
+                                break;
+                            }
+                        }
+
+                        gp.gameState = gp.playState;
+                    } else {
+                        gp.fullText = gp.talkingNPC.dialoguePages[gp.dialoguePageIndex];
+                        gp.currentSpeaker = gp.winSpeakers[gp.dialoguePageIndex];
+                        gp.displayedText = "";
+                        gp.charIndex = 0;
+                    }
+                }
+            }
+        }
         else if (gp.gameState == gp.combatState) {
             char c = e.getKeyChar();
-            if (Character.isLetter(c)) {
-                gp.combatManager.handleKeyPress(c);
+            if (Character.isLetter(c)) gp.combatManager.handleKeyPress(c);
+        }
+        else if (gp.gameState == gp.gameOverState) {
+            if (code == KeyEvent.VK_ENTER) {
+                gp.gameState = gp.playState;
+
+
+                gp.switchMap("/maps/room1.txt", 35, 31);
             }
         }
 

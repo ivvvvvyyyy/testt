@@ -83,6 +83,25 @@ public class Player extends Entity {
                 spriteCounter = 0;
             }
         }
+
+
+        int currentCol = (worldX + solidArea.x + (solidArea.width / 2)) / gp.tileSize;
+        int currentRow = (worldY + solidArea.y + (solidArea.height / 2)) / gp.tileSize;
+
+
+        if (currentCol >= 0 && currentCol < gp.maxWorldCol && currentRow >= 0 && currentRow < gp.maxWorldRow) {
+
+
+            if (gp.tileM.mapTileNum[currentCol][currentRow] == 49) {
+                gp.switchMap("/maps/room1.txt", 35, 31);
+
+
+                keyB.upPressed = false;
+                keyB.downPressed = false;
+                keyB.leftPressed = false;
+                keyB.rightPressed = false;
+            }
+        }
     }
 
     public void draw(Graphics2D g2) {

@@ -11,11 +11,6 @@ public class Entity {
     public String direction;
     public int spriteCounter = 0;
     public int spriteNum = 1;
-
-    public int maxHearts = 3;
-    public int currentHearts = 3;
-    public boolean alive = true;
-
     public Rectangle solidArea = new Rectangle(0, 0, 32, 32);
     public int solidAreaDefaultX = 0;
     public int solidAreaDefaultY = 0;

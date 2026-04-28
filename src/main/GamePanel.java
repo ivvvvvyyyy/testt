@@ -8,6 +8,9 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
 public class GamePanel extends JPanel implements Runnable {
 
@@ -18,22 +21,21 @@ public class GamePanel extends JPanel implements Runnable {
     public final int maxScreenRow = 24;
     public final int screenWidth  = tileSize * maxScreenCol;
     public final int screenHeight = tileSize * maxScreenRow;
-
+    public boolean screenShake = false;
     public final int maxWorldCol = 70;
     public final int maxWorldRow = 45;
-
-    // Game states
     public int gameState;
-    public final int titleState    = 0;
-    public final int playState     = 1;
-    public final int storyState    = 2;
-    public final int dialogueState = 3;
-    public final int combatState   = 4;
+    public final int titleState     = 0;
+    public final int playState      = 1;
+    public final int storyState     = 2;
+    public final int dialogueState  = 3;
+    public final int combatState    = 4;
+    public final int winDialogueState = 5;
+    public final int gameOverState  = 6;
 
-    public int subState  = 0;
     public int commandNum = 0;
 
-    // Story / typewriter
+    // Story
     public String[] storyPages = {
             "In a world consumed by sin, one hunter stands against the darkness...",
             "Seven evils roam the land. You must face them all.",
@@ -46,12 +48,15 @@ public class GamePanel extends JPanel implements Runnable {
     public int textCounter = 0;
     public final int TEXT_SPEED = 2;
 
-    // Dialogue
+    // Dialogue System
     public int dialoguePageIndex = 0;
     public NPC talkingNPC = null;
+    public String currentSpeaker = "";
+    public String[] winSpeakers;
 
     // Interaction
     public boolean interactPressed = false;
+    private Random random = new Random();
 
     public Font dtmSans;
     int FPS = 60;
@@ -60,10 +65,11 @@ public class GamePanel extends JPanel implements Runnable {
     Thread gameThread;
     public TileManger tileM = new TileManger(this);
     public Player player = new Player(this, keyB);
+    public SoundTracks music = new SoundTracks();
+    public SoundTracks se = new SoundTracks(); // Sound Effects
     public CollisionChecker collisionChecker = new CollisionChecker(this);
     public CombatManager combatManager;
 
-    // Fixed: Now utilizing the imported NPC class directly
     public NPC[] npcs = new NPC[10];
 
     public GamePanel() {
@@ -76,37 +82,48 @@ public class GamePanel extends JPanel implements Runnable {
         loadFont();
         setupGame();
         combatManager = new CombatManager(this);
+        gameState = titleState;
 
-        // FIXED: Start on title screen instead of story screen
-        gameState   = titleState;
-
-        fullText    = storyPages[0];
-        displayedText = "";
-        charIndex   = 0;
+        playMusic(1);
     }
 
     public void loadFont() {
         try {
             InputStream is = getClass().getResourceAsStream("/font/DTM-Sans.otf");
-            dtmSans = Font.createFont(Font.TRUETYPE_FONT, is);
+            if (is != null) {
+                dtmSans = Font.createFont(Font.TRUETYPE_FONT, is);
+            } else {
+                dtmSans = new Font("Arial", Font.BOLD, 24);
+            }
         } catch (FontFormatException | IOException e) {
-            e.printStackTrace();
             dtmSans = new Font("Arial", Font.BOLD, 24);
         }
     }
 
     public void setupGame() {
-        npcs[0] = new NPC(this, "Elder",
-                tileSize * 30, tileSize * 18,
+        npcs[0] = new NPC(this, "Crow", tileSize * 30, tileSize * 18,
                 new String[]{
                         "Ah, a traveler. You look lost.",
-                        "The first sin lies to the east. Be careful."
+                        "You will find sins lying behind closed doors.",
+                        "May luck be with you"
                 }, false);
+    }
 
-        npcs[1] = new NPC(this, "Guard",
-                tileSize * 38, tileSize * 22,
+    public void switchMap(String mapFilePath, int spawnCol, int spawnRow) {
+        tileM.loadMap(mapFilePath);
+
+        player.worldX = tileSize * spawnCol;
+        player.worldY = tileSize * spawnRow;
+
+        for (int i = 0; i < npcs.length; i++) {
+            npcs[i] = null;
+        }
+
+        npcs[0] = new NPC(this, "Anger", tileSize * 35, tileSize * 20,
                 new String[]{
-                        "Halt! Only hunters may pass."
+                        "I CANNOT ESCAPE MADNESS.",
+                        "YOU CANNOT ESCAPE MADNESS",
+                        "I SHALL BURN THIS PLACE TO THE GROUND"
                 }, true);
     }
 
@@ -121,10 +138,9 @@ public class GamePanel extends JPanel implements Runnable {
         double drawInterval = 1000000000.0 / FPS;
         double delta = 0;
         long lastTime = System.nanoTime();
-        long currentTime;
 
         while (gameThread != null) {
-            currentTime = System.nanoTime();
+            long currentTime = System.nanoTime();
             delta += (currentTime - lastTime) / drawInterval;
             lastTime = currentTime;
             if (delta >= 1) {
@@ -139,10 +155,11 @@ public class GamePanel extends JPanel implements Runnable {
         if (gameState == playState) {
             player.update();
             checkNPCInteraction();
+        } else if (gameState == storyState || gameState == dialogueState || gameState == winDialogueState) {
+            updateTypewriter();
+        } else if (gameState == combatState) {
+            combatManager.update();
         }
-        if (gameState == storyState)    updateTypewriter();
-        if (gameState == dialogueState) updateTypewriter();
-        if (gameState == combatState)   combatManager.update();
     }
 
     public void updateTypewriter() {
@@ -163,16 +180,14 @@ public class GamePanel extends JPanel implements Runnable {
             int dy = Math.abs(player.worldY - npc.worldY);
             if (dx <= tileSize && dy <= tileSize && interactPressed) {
                 interactPressed = false;
-                if (npc.hostile) {
-                    combatManager.startCombat(npc);
-                } else {
-                    talkingNPC = npc;
-                    dialoguePageIndex = 0;
-                    fullText = npc.dialoguePages[0];
-                    displayedText = "";
-                    charIndex = 0;
-                    gameState = dialogueState;
-                }
+                talkingNPC = npc;
+                dialoguePageIndex = 0;
+                fullText = npc.dialoguePages[0];
+                currentSpeaker = npc.name;
+                displayedText = "";
+                charIndex = 0;
+                gameState = dialogueState;
+                return;
             }
         }
         interactPressed = false;
@@ -183,23 +198,35 @@ public class GamePanel extends JPanel implements Runnable {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
 
+        boolean isAngerSpeaking = (gameState == dialogueState || gameState == winDialogueState)
+                && "Anger".equals(currentSpeaker)
+                && charIndex < fullText.length();
+
+        int offsetX = 0;
+        int offsetY = 0;
+
+        if (screenShake || isAngerSpeaking) {
+            offsetX = random.nextInt(9) - 4;
+            offsetY = random.nextInt(9) - 4;
+            g2.translate(offsetX, offsetY);
+        }
+
         if (gameState == titleState) {
             drawTitleScreen(g2);
-        } else if (gameState == storyState) {
-            drawStoryScreen(g2);
-        } else if (gameState == playState) {
+        } else {
             tileM.draw(g2);
             for (NPC npc : npcs) { if (npc != null) npc.draw(g2); }
             player.draw(g2);
-        } else if (gameState == dialogueState) {
-            tileM.draw(g2);
-            for (NPC npc : npcs) { if (npc != null) npc.draw(g2); }
-            player.draw(g2);
-            drawDialogueBox(g2);
-        } else if (gameState == combatState) {
-            tileM.draw(g2);
-            player.draw(g2);
-            combatManager.draw(g2);
+
+            if (gameState == storyState) drawStoryScreen(g2);
+            if (gameState == dialogueState || gameState == winDialogueState) drawDialogueBox(g2);
+            if (gameState == combatState) combatManager.draw(g2);
+
+            if (gameState == gameOverState) drawGameOverScreen(g2);
+        }
+
+        if (screenShake || isAngerSpeaking) {
+            g2.translate(-offsetX, -offsetY);
         }
 
         g2.dispose();
@@ -208,10 +235,9 @@ public class GamePanel extends JPanel implements Runnable {
     public void drawTitleScreen(Graphics2D g2) {
         g2.setColor(Color.BLACK);
         g2.fillRect(0, 0, screenWidth, screenHeight);
-
         g2.setFont(dtmSans.deriveFont(Font.BOLD, 80F));
-        String text = "SINS HUNTER";
         g2.setColor(Color.WHITE);
+        String text = "SINS HUNTER";
         g2.drawString(text, getXforCenteredText(text, g2), tileSize * 5);
 
         g2.setFont(dtmSans.deriveFont(Font.PLAIN, 32F));
@@ -242,26 +268,17 @@ public class GamePanel extends JPanel implements Runnable {
         g2.setColor(Color.BLACK);
         g2.fillRect(0, 0, screenWidth, screenHeight);
 
+        int boxW = screenWidth - (tileSize * 4);
+        int boxH = tileSize * 8;
         int boxX = tileSize * 2;
-        int boxY = tileSize * 3;
-        int boxW = screenWidth  - tileSize * 4;
-        int boxH = screenHeight - tileSize * 6;
+        int boxY = (screenHeight / 2) - (boxH / 2);
 
-        g2.setColor(new Color(20, 20, 20, 230));
-        g2.fillRect(boxX, boxY, boxW, boxH);
         g2.setColor(Color.WHITE);
         g2.setStroke(new BasicStroke(4));
         g2.drawRect(boxX, boxY, boxW, boxH);
 
-        g2.setFont(dtmSans.deriveFont(Font.PLAIN, 26F));
-        g2.setColor(Color.WHITE);
-        drawWrappedText(g2, displayedText, boxX + tileSize, boxY + tileSize + 10, boxW - tileSize * 2, 36);
-
-        if (charIndex >= fullText.length()) {
-            String prompt = storyPageIndex < storyPages.length - 1 ? "[ ENTER: Next ]" : "[ ENTER: Begin ]";
-            g2.setFont(dtmSans.deriveFont(Font.PLAIN, 20F));
-            g2.drawString(prompt, getXforCenteredText(prompt, g2), boxY + boxH - 20);
-        }
+        g2.setFont(dtmSans.deriveFont(Font.PLAIN, 34F));
+        drawCenteredWrappedText(g2, displayedText, screenWidth / 2, screenHeight / 2, boxW - (tileSize * 2), 48);
     }
 
     public void drawDialogueBox(Graphics2D g2) {
@@ -276,16 +293,17 @@ public class GamePanel extends JPanel implements Runnable {
         g2.setStroke(new BasicStroke(3));
         g2.drawRect(boxX, boxY, boxW, boxH);
 
-        String tagName = (talkingNPC != null) ? talkingNPC.name : "You";
+        String tagName = currentSpeaker;
+        if (tagName == null || tagName.isEmpty()) tagName = "Unknown";
+
         int tagW = tileSize * 4;
         int tagH = tileSize;
         int tagY = boxY - tagH;
-        int tagX = (talkingNPC != null) ? boxX + boxW - tagW : boxX;
+        int tagX = tagName.equalsIgnoreCase("Hunter") ? boxX : boxX + boxW - tagW;
 
         g2.setColor(new Color(20, 20, 20, 220));
         g2.fillRect(tagX, tagY, tagW, tagH);
         g2.setColor(Color.WHITE);
-        g2.setStroke(new BasicStroke(3));
         g2.drawRect(tagX, tagY, tagW, tagH);
 
         g2.setFont(dtmSans.deriveFont(Font.BOLD, 18F));
@@ -294,12 +312,51 @@ public class GamePanel extends JPanel implements Runnable {
 
         g2.setFont(dtmSans.deriveFont(Font.PLAIN, 24F));
         drawWrappedText(g2, displayedText, boxX + tileSize / 2, boxY + tileSize, boxW - tileSize, 34);
+    }
 
-        if (charIndex >= fullText.length() && talkingNPC != null) {
-            String prompt = dialoguePageIndex < talkingNPC.dialoguePages.length - 1
-                    ? "[ ENTER: Next ]" : "[ ENTER: Close ]";
-            g2.setFont(dtmSans.deriveFont(Font.PLAIN, 18F));
-            g2.drawString(prompt, boxX + boxW - tileSize * 4, boxY + boxH - 10);
+    public void drawGameOverScreen(Graphics2D g2) {
+        g2.setColor(new Color(0, 0, 0, 150));
+        g2.fillRect(0, 0, screenWidth, screenHeight);
+
+        g2.setFont(dtmSans.deriveFont(Font.BOLD, 90F));
+        String text = "GAME OVER";
+        g2.setColor(Color.BLACK);
+        g2.drawString(text, getXforCenteredText(text, g2), tileSize * 8);
+        g2.setColor(new Color(200, 0, 0));
+        g2.drawString(text, getXforCenteredText(text, g2) - 4, tileSize * 8 - 4);
+
+        g2.setFont(dtmSans.deriveFont(Font.PLAIN, 32F));
+        int btnWidth  = tileSize * 12;
+        int btnHeight = tileSize * 2;
+        int btnX = screenWidth / 2 - btnWidth / 2;
+
+        commandNum = 0;
+        drawButton(g2, "TRY AGAIN", btnX, tileSize * 14, btnWidth, btnHeight, 0);
+    }
+
+    public void drawCenteredWrappedText(Graphics2D g2, String text, int centerX, int startY, int maxWidth, int lineHeight) {
+        String[] words = text.split(" ");
+        StringBuilder line = new StringBuilder();
+        List<String> lines = new ArrayList<>();
+
+        for (String word : words) {
+            String test = line + (line.length() > 0 ? " " : "") + word;
+            if ((int) g2.getFontMetrics().getStringBounds(test, g2).getWidth() > maxWidth) {
+                lines.add(line.toString());
+                line = new StringBuilder(word);
+            } else {
+                if (line.length() > 0) line.append(" ");
+                line.append(word);
+            }
+        }
+        if (line.length() > 0) lines.add(line.toString());
+
+        int currentY = startY - ((lines.size() * lineHeight) / 2);
+
+        for (String l : lines) {
+            int x = centerX - (int) g2.getFontMetrics().getStringBounds(l, g2).getWidth() / 2;
+            g2.drawString(l, x, currentY);
+            currentY += lineHeight;
         }
     }
 
@@ -307,11 +364,9 @@ public class GamePanel extends JPanel implements Runnable {
         String[] words = text.split(" ");
         StringBuilder line = new StringBuilder();
         int currentY = y;
-
         for (String word : words) {
             String test = line + (line.length() > 0 ? " " : "") + word;
-            int testWidth = (int) g2.getFontMetrics().getStringBounds(test, g2).getWidth();
-            if (testWidth > maxWidth) {
+            if ((int) g2.getFontMetrics().getStringBounds(test, g2).getWidth() > maxWidth) {
                 g2.drawString(line.toString(), x, currentY);
                 currentY += lineHeight;
                 line = new StringBuilder(word);
@@ -324,7 +379,20 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     public int getXforCenteredText(String text, Graphics2D g2) {
-        int length = (int) g2.getFontMetrics().getStringBounds(text, g2).getWidth();
-        return screenWidth / 2 - length / 2;
+        return screenWidth / 2 - (int) g2.getFontMetrics().getStringBounds(text, g2).getWidth() / 2;
+    }
+    public void playMusic(int i) {
+        music.setFile(i);
+        music.play();
+        music.loop();
+    }
+
+    public void stopMusic() {
+        music.stop();
+    }
+
+    public void playSE(int i) {
+        se.setFile(i);
+        se.play();
     }
 }

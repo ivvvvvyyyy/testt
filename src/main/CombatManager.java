@@ -1,216 +1,197 @@
 package main;
 
+import Entity.NPC;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.Random;
 
 public class CombatManager {
     GamePanel gp;
-    Random rand = new Random();
+    NPC currentEnemy;
+    public int playerHealth = 100;
+    public int enemyHealth = 100;
 
-    public ArrayList<FallingLetter> letters = new ArrayList<>();
+    // CIRCLE MECHANICS
+    private class TargetLetter {
+        char character;
+        int x, y;
+        int maxLife;
+        int currentLife;
 
-    private int spawnTimer = 0;
-    private int spawnInterval = 90;
+        public TargetLetter(char c, int x, int y, int lifeTime) {
+            this.character = c;
+            this.x = x;
+            this.y = y;
+            this.maxLife = lifeTime;
+            this.currentLife = lifeTime;
+        }
+    }
 
-    public int dangerLineY;
-    public Entity.NPC targetNPC = null;
-
-    private int fallSpeed = 3;
-
-    public boolean playerHit = false;
-    public boolean enemyHit = false;
-    private int hitFlashTimer = 0;
-
-    private static final char[] VALID_KEYS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
+    private ArrayList<TargetLetter> targets = new ArrayList<>();
+    private Random random = new Random();
+    private int spawnCounter = 0;
+    private int spawnRate = 60;
+    private int letterLifeTime = 120;
 
     public CombatManager(GamePanel gp) {
         this.gp = gp;
-        dangerLineY = gp.screenHeight - 120;
     }
 
-    public void startCombat(Entity.NPC npc) {
-        targetNPC = npc;
-        letters.clear();
-        spawnTimer = 0;
-        playerHit = false;
-        enemyHit = false;
-        npc.currentHearts = npc.maxHearts;
-        gp.player.currentHearts = gp.player.maxHearts;
+    public void startCombat(NPC npc) {
+        gp.stopMusic();
+        gp.playMusic(0);
+        this.currentEnemy = npc;
+        this.playerHealth = 100;
+        this.enemyHealth = 100;
+
+        this.targets.clear();
+        this.spawnCounter = 0;
         gp.gameState = gp.combatState;
     }
 
     public void update() {
-        if (targetNPC == null) return;
+        //  Check Win / Loss
+        if (enemyHealth <= 0) {
+            gp.stopMusic();
+            gp.playMusic(1);
+            gp.gameState = gp.winDialogueState;
+            gp.talkingNPC = currentEnemy;
 
-        if (hitFlashTimer > 0) {
-            hitFlashTimer--;
-            if (hitFlashTimer == 0) {
-                playerHit = false;
-                enemyHit = false;
+            //dialogue pages
+            currentEnemy.dialoguePages = new String[] {
+                    "RAAAAAAGGGHHHHH!!!! ... I... I am finally cold.",
+                    "Even the hottest fire eventually turns to ash. Rest now, Sinner."
+            };
+
+            gp.winSpeakers = new String[] { currentEnemy.name, "Hunter" };
+
+            gp.currentSpeaker = gp.winSpeakers[0];
+            gp.fullText = currentEnemy.dialoguePages[0];
+            gp.displayedText = "";
+            gp.charIndex = 0;
+            gp.dialoguePageIndex = 0;
+            enemyHealth = 1;
+            return;
+        } else if (playerHealth <= 0) {
+            gp.stopMusic();
+            gp.gameState = gp.gameOverState;
+            return;
+        }
+
+        //  Spawn New Letters
+        spawnCounter++;
+        if (spawnCounter >= spawnRate) {
+            char randomChar = (char) ('A' + random.nextInt(26));
+
+            int radius = 30;
+            int minX = radius * 2;
+            int maxX = gp.screenWidth - (radius * 2);
+            int minY = radius * 2;
+            int maxY = gp.screenHeight - (gp.tileSize * 7) - radius;
+
+            int randomX = minX + random.nextInt(maxX - minX);
+            int randomY = minY + random.nextInt(maxY - minY);
+
+            targets.add(new TargetLetter(randomChar, randomX, randomY, letterLifeTime));
+            spawnCounter = 0;
+        }
+
+        // Update letter lifetimes
+        Iterator<TargetLetter> iterator = targets.iterator();
+        while (iterator.hasNext()) {
+            TargetLetter t = iterator.next();
+            t.currentLife--;
+
+            if (t.currentLife <= 0) {
+                playerHealth -= 10;
+                iterator.remove();
             }
         }
+    }
 
-        spawnTimer++;
-        if (spawnTimer >= spawnInterval) {
-            spawnLetter();
-            spawnTimer = 0;
-        }
+    public void handleKeyPress(char c) {
+        char pressedChar = Character.toUpperCase(c);
 
-        ArrayList<FallingLetter> toRemove = new ArrayList<>();
-        for (FallingLetter fl : letters) {
-            fl.y += fallSpeed;
-            if (fl.y >= dangerLineY) {
-                toRemove.add(fl);
-                hitPlayer();
+        Iterator<TargetLetter> iterator = targets.iterator();
+        while (iterator.hasNext()) {
+            TargetLetter t = iterator.next();
+            if (t.character == pressedChar) {
+                enemyHealth -= 10;
+                iterator.remove();
+                break;
             }
         }
-        letters.removeAll(toRemove);
-
-        if (gp.player.currentHearts <= 0) endCombat(false);
-        if (targetNPC.currentHearts <= 0)  endCombat(true);
-    }
-
-    private void spawnLetter() {
-        char c = VALID_KEYS[rand.nextInt(VALID_KEYS.length)];
-        int x = 80 + rand.nextInt(gp.screenWidth - 160);
-        letters.add(new FallingLetter(c, x, 60));
-    }
-
-    public void handleKeyPress(char key) {
-        char upper = Character.toUpperCase(key);
-        FallingLetter match = null;
-        int lowestY = -1;
-
-        for (FallingLetter fl : letters) {
-            if (fl.letter == upper && fl.y > lowestY) {
-                lowestY = fl.y;
-                match = fl;
-            }
-        }
-
-        if (match != null) {
-            letters.remove(match);
-            hitEnemy();
-        }
-    }
-
-    private void hitPlayer() {
-        gp.player.currentHearts--;
-        playerHit = true;
-        hitFlashTimer = 30;
-    }
-
-    private void hitEnemy() {
-        if (targetNPC != null) {
-            targetNPC.currentHearts--;
-            enemyHit = true;
-            hitFlashTimer = 30;
-        }
-    }
-
-    private void endCombat(boolean playerWon) {
-        letters.clear();
-        if (playerWon) {
-            for (int i = 0; i < gp.npcs.length; i++) {
-                // Fixed: Changed gp.NPC[i] to gp.npcs[i]
-                if (gp.npcs[i] == targetNPC) {
-                    gp.npcs[i] = null;
-                    break;
-                }
-            }
-        }
-        targetNPC = null;
-        gp.gameState = gp.playState;
     }
 
     public void draw(Graphics2D g2) {
-        if (targetNPC == null) return;
-
-        g2.setColor(new Color(0, 0, 0, 180));
+        g2.setColor(Color.BLACK);
         g2.fillRect(0, 0, gp.screenWidth, gp.screenHeight);
 
-        g2.setColor(Color.RED);
-        g2.setStroke(new BasicStroke(3));
-        g2.drawLine(0, dangerLineY, gp.screenWidth, dangerLineY);
-
-        g2.setFont(gp.dtmSans.deriveFont(Font.BOLD, 16F));
-        g2.setColor(Color.RED);
-        g2.drawString("DANGER", 10, dangerLineY - 6);
-
-        g2.setFont(gp.dtmSans.deriveFont(Font.BOLD, 40F));
-        for (FallingLetter fl : letters) {
-            float danger = Math.min(1f, (float) fl.y / dangerLineY);
-            Color letterColor = new Color(
-                    (int)(255 * danger),
-                    (int)(255 * (1 - danger)),
-                    50
-            );
-            g2.setColor(letterColor);
-            g2.drawString(String.valueOf(fl.letter), fl.x, fl.y);
+        if (currentEnemy != null && currentEnemy.up1 != null) {
+            int width = gp.tileSize * 5;
+            int height = gp.tileSize * 5;
+            int x = gp.screenWidth / 2 - width / 2;
+            int y = gp.tileSize;
+            g2.drawImage(currentEnemy.up1, x, y, width, height, null);
         }
 
-        drawHearts(g2);
+        g2.setFont(gp.dtmSans.deriveFont(Font.BOLD, 32F));
+        for (TargetLetter t : targets) {
+            int radius = 25;
 
-        if (playerHit) {
-            g2.setColor(new Color(255, 0, 0, 60));
-            g2.fillRect(0, 0, gp.screenWidth, gp.screenHeight);
-        }
-        if (enemyHit) {
-            g2.setColor(new Color(255, 255, 255, 40));
-            g2.fillRect(0, 0, gp.screenWidth, gp.screenHeight);
-        }
+            g2.setColor(Color.RED);
+            int timerRadius = (int) (radius * 1.5 * ((double) t.currentLife / t.maxLife));
+            g2.setStroke(new BasicStroke(3));
+            g2.drawOval(t.x - timerRadius, t.y - timerRadius, timerRadius * 2, timerRadius * 2);
 
-        g2.setFont(gp.dtmSans.deriveFont(Font.PLAIN, 18F));
-        g2.setColor(Color.WHITE);
-        g2.drawString("Press the falling letters before they cross the red line!",
-                20, gp.screenHeight - 20);
-    }
+            g2.setColor(new Color(20, 20, 20, 200));
+            g2.fillOval(t.x - radius, t.y - radius, radius * 2, radius * 2);
 
-    private void drawHearts(Graphics2D g2) {
-        int heartSize = 32;
-        int padding = 8;
+            g2.setColor(Color.WHITE);
+            g2.setStroke(new BasicStroke(2));
+            g2.drawOval(t.x - radius, t.y - radius, radius * 2, radius * 2);
 
-        g2.setFont(gp.dtmSans.deriveFont(Font.BOLD, 18F));
-        g2.setColor(Color.WHITE);
-        g2.drawString("YOU", 20, dangerLineY + 30);
-        for (int i = 0; i < gp.player.maxHearts; i++) {
-            drawHeart(g2, 20 + i * (heartSize + padding), dangerLineY + 40, heartSize, i < gp.player.currentHearts);
+            FontMetrics fm = g2.getFontMetrics();
+            String letter = String.valueOf(t.character);
+            int textX = t.x - (fm.stringWidth(letter) / 2);
+            int textY = t.y + (fm.getAscent() - fm.getDescent()) / 2 - 2;
+
+            g2.setColor(Color.WHITE);
+            g2.drawString(letter, textX, textY);
         }
 
-        String npcName = targetNPC.name.toUpperCase();
-        g2.setFont(gp.dtmSans.deriveFont(Font.BOLD, 18F));
-        g2.setColor(Color.WHITE);
-        int nameX = gp.screenWidth - 20 - (targetNPC.maxHearts * (heartSize + padding));
-        g2.drawString(npcName, nameX, dangerLineY + 30);
-        for (int i = 0; i < targetNPC.maxHearts; i++) {
-            drawHeart(g2, nameX + i * (heartSize + padding), dangerLineY + 40, heartSize, i < targetNPC.currentHearts);
-        }
-    }
+        int boxX = gp.tileSize * 2;
+        int boxY = gp.screenHeight - (gp.tileSize * 6);
+        int boxW = gp.screenWidth - (gp.tileSize * 4);
+        int boxH = gp.tileSize * 5;
 
-    private void drawHeart(Graphics2D g2, int x, int y, int size, boolean filled) {
-        g2.setColor(filled ? Color.RED : new Color(80, 80, 80));
-        int half = size / 2;
-        int quarter = size / 4;
-        g2.fillOval(x, y, half, half);
-        g2.fillOval(x + quarter, y, half, half);
-        int[] xPoints = {x, x + size, x + half};
-        int[] yPoints = {y + quarter, y + quarter, y + size};
-        g2.fillPolygon(xPoints, yPoints, 3);
         g2.setColor(Color.BLACK);
-        g2.setStroke(new BasicStroke(1));
-        g2.drawOval(x, y, half, half);
-        g2.drawOval(x + quarter, y, half, half);
-        g2.drawPolygon(xPoints, yPoints, 3);
-    }
+        g2.fillRect(boxX, boxY, boxW, boxH);
 
-    public static class FallingLetter {
-        public char letter;
-        public int x, y;
-        public FallingLetter(char letter, int x, int y) {
-            this.letter = letter;
-            this.x = x;
-            this.y = y;
-        }
+        g2.setColor(Color.WHITE);
+        g2.setStroke(new BasicStroke(3));
+        g2.drawRect(boxX, boxY, boxW, boxH);
+
+        g2.setFont(gp.dtmSans.deriveFont(Font.BOLD, 22F));
+
+        g2.drawString("HUNTER HP", boxX + 30, boxY + 45);
+        g2.setColor(Color.RED);
+        g2.fillRect(boxX + 30, boxY + 60, 200, 25);
+        g2.setColor(Color.GREEN);
+        g2.fillRect(boxX + 30, boxY + 60, (int)(200 * (Math.max(0, playerHealth)/100.0)), 25);
+
+        g2.setColor(Color.WHITE);
+        String enemyName = currentEnemy.name.toUpperCase() + " HP";
+        g2.drawString(enemyName, boxX + boxW - 230, boxY + 45);
+        g2.setColor(Color.RED);
+        g2.fillRect(boxX + boxW - 230, boxY + 60, 200, 25);
+        g2.setColor(Color.YELLOW);
+        g2.fillRect(boxX + boxW - 230, boxY + 60, (int)(200 * (Math.max(0, enemyHealth)/100.0)), 25);
+
+        g2.setColor(Color.WHITE);
+        g2.setFont(gp.dtmSans.deriveFont(Font.ITALIC, 20F));
+        String prompt = "PRESS THE LETTERS BEFORE THE RED RING CLOSES!";
+        g2.drawString(prompt, gp.getXforCenteredText(prompt, g2), boxY + boxH - 20);
     }
 }
